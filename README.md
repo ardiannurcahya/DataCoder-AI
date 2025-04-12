@@ -1,5 +1,4 @@
 # **Documentation for DataCoder AI**  
-**Version**: 1.0  
 **Last Updated**: 2024-06-15  
 
 ---
@@ -227,5 +226,3 @@ plt.show()
 1. Replace hardcoded API keys with environment variables  
 2. Add user authentication for multi-user support  
 3. Implement rate limiting for Groq API calls  
-
-For full source code, visit: [GitHub Repository Link]

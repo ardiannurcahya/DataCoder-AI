@@ -63,32 +63,25 @@ fuzzywuzzy==0.18.0      # (For column name matching - if used)
 ### **2.1 Component Diagram**  
 ```mermaid
 flowchart TB
-    A[Mulai] --> B[Deploy di HuggingFace Spaces]
-    B --> C{Mode Aplikasi}
-    C -->|Mode Chatbot| D[Input Pertanyaan Pengguna]
-    C -->|Mode Analisis Data| E[Upload CSV]
-    
-    %% Flow Chatbot
-    D --> F[Proses dengan Groq LLM]
-    F --> G[Tampilkan Jawaban]
-    G --> H{Input Baru?}
-    H -->|Ya| D
-    H -->|Tidak| I[Simpan History]
-    
-    %% Flow Analisis Data
-    E --> J[Proses Data]
-    J --> K[Merge & Cleaning]
-    K --> L[Eksekusi Kode]
-    L -->|Auto| M[Generate Code AI]
-    L -->|Manual| N[Input Kode User]
-    M --> O[Eksekusi & Analisis Hasil]
-    N --> O
-    O --> P{Error?}
-    P -->|Ya| Q[Tampilkan Pesan Error]
-    P -->|Tidak| R[Simpan ke History]
-    R --> S[Ekspor Data]
-    
-    S --> T[Deploy ke Production]
+     subgraph Frontend
+         A[Streamlit UI] --> B[File Uploader]
+         A --> C[Code Editor]
+         A --> D[Output Display]
+     end
+ 
+     subgraph Backend
+         B --> E[Data Processor]
+         C --> F[Code Executor]
+         C --> G[Groq LLM API]
+         F --> H[Session State]
+         E --> G[Hugging Face]
+         C --> G[Hugging Face]
+         A --> G[Hugging Face]
+     end
+ 
+     subgraph External
+         H -->|API Calls| I[Groq Cloud]
+     end
 ```
 
 ### **2.2 Data Flow**  

@@ -62,7 +62,66 @@ fuzzywuzzy==0.18.0      # (For column name matching - if used)
 
 ### **2.1 Component Diagram**  
 ```mermaid
-flowchart TB subgraph Frontend A[Streamlit UI] --> B[File Uploader] A --> C[Code Editor] A --> D[Output Display] end subgraph Backend B --> E[Data Processor] C --> F[Code Executor] C --> G[Groq LLM API] F --> H[Session State] end subgraph External G -->|API Calls| I[Groq Cloud] end
+flowchart TB
+    A[Mulai] --> B[Tampilkan Antarmuka Utama]
+    B --> C{Pilih Mode}
+    C -->|Panel Kiri| D[Mode Chatbot]
+    C -->|Panel Kanan| E[Mode Analisis Data]
+    
+    %% Flowchart Mode Chatbot
+    D --> D1[Input Pertanyaan Pengguna]
+    D1 --> D2[Proses dengan LLM (Groq)]
+    D2 --> D3[Tampilkan Jawaban]
+    D3 --> D4{Input Baru?}
+    D4 -->|Ya| D1
+    D4 -->|Tidak| D5[Simpan History Chat]
+    
+    %% Flowchart Mode Analisis Data
+    E --> E1[Upload File CSV]
+    E1 --> E2{File Valid?}
+    E2 -->|Tidak| E3[Tampilkan Error]
+    E2 -->|Ya| E4[Proses File]
+    E4 --> E5{Tipe Merge?}
+    E5 -->|Single| E6[Tampilkan Data]
+    E5 -->|Horizontal| E7[Merge Columns]
+    E5 -->|Vertical| E8[Concat Rows]
+    E5 -->|Join| E9[Merge on Keys]
+    E7 --> E10[Preview Data]
+    E8 --> E10
+    E9 --> E10
+    E10 --> E11{Konfirmasi?}
+    E11 -->|Tidak| E4
+    E11 -->|Ya| E12[Simpan DataFrame]
+    
+    E12 --> E13[Pembersihan Data]
+    E13 --> E14{Handle Missing Values?}
+    E14 -->|Ya| E15[Apply NaN Handling]
+    E14 -->|Tidak| E16{Lanjut}
+    E13 --> E17{Handle Duplicates?}
+    E17 -->|Ya| E18[Apply Deduplication]
+    E17 -->|Tidak| E16
+    E13 --> E19{Modifikasi Kolom?}
+    E19 -->|Ya| E20[Rename/Drop Columns]
+    E19 -->|Tidak| E16
+    
+    E16 --> E21[Input Kode Analisis]
+    E21 --> E22{Metode Input?}
+    E22 -->|Auto Run| E23[Generate Code dengan LLM]
+    E22 -->|Manual Run| E24[Input Manual]
+    E23 --> E25[Eksekusi Kode]
+    E24 --> E25
+    E25 --> E26{Error?}
+    E26 -->|Ya| E27[Tampilkan Error]
+    E26 -->|Tidak| E28[Simpan Hasil]
+    E28 --> E29[Tampilkan Output]
+    E29 --> E30[Analisis Hasil dengan LLM]
+    E30 --> E31[Simpan ke History]
+    
+    E31 --> E32{Input Lagi?}
+    E32 -->|Ya| E21
+    E32 -->|Tidak| E33[Ekspor Data?]
+    E33 -->|Ya| E34[Generate File Output]
+    E33 -->|Tidak| F[Selesai]
 ```
 
 ### **2.2 Data Flow**  

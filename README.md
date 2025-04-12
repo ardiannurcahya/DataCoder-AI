@@ -62,33 +62,67 @@ fuzzywuzzy==0.18.0      # (For column name matching - if used)
 
 ### **2.1 Component Diagram**  
 ```mermaid
-flowchart TB
-    subgraph HuggingFaceSpace["Hugging Face Space (Deployment)"]
-        subgraph Frontend
-            A[Streamlit UI] --> B[File Uploader]
-            A --> C[Code Editor]
-            A --> D[Output Display]
-        end
-
-        subgraph Backend
-            B --> E[Data Processor]
-            C --> F[Code Executor]
-            C --> G[Groq LLM API Client]
-            F --> H[Session State]
-            G -->|Internal Calls| E
-            E -->|Processed Data| D
-        end
+flowchart TD
+    subgraph UserLayer["🔵 User Layer"]
+        U[User] -->|"1. Upload File/Code & Interaksi"| W["🌐 Streamlit Web Interface"]
+        W -->|"8. Tampilkan Hasil"| U
     end
 
-    subgraph External
-        I[Groq Cloud] -->|API Responses| G
-        G -->|API Requests| I
-        J[Internet] -->|HTTPS Traffic| HuggingFaceSpace
-        HuggingFaceSpace -->|HTTPS Traffic| J
+    subgraph HuggingFaceSpace["🟢 Hugging Face Space Container"]
+        subgraph Frontend["🖥️ Frontend (Streamlit)"]
+            F1["📤 File Uploader Component"] 
+            F2["⌨️ Code Editor Component"]
+            F3["📊 Output Display Component"]
+        end
+
+        subgraph Backend["⚙️ Backend Services"]
+            B1[["📁 Data Processor
+            (Validasi & Parsing Data)"]]
+            B2[["🐍 Code Executor
+            (Sandboxed Environment)"]]
+            B3[["🤖 Groq API Client
+            (API Handler + Auth)"]]
+            B4[["💾 Session State Manager"]]
+            B5[["♻️ Cache System"]]
+            B6[["🚨 Error Handler"]]
+        end
+
+        subgraph HFInfra["🔧 Hugging Face Infrastructure"]
+            H1["🔑 Secret Storage (API Keys)"]
+            H2["📦 Dependency Manager (requirements.txt)"]
+            H3["📈 Resource Monitor (CPU/Memory)"]
+        end
+
+        F1 -->|"2. Raw Data"| B1
+        F2 -->|"3. Kode Input"| B2
+        B2 -->|"4. Eksekusi & Hasil Awal"| B4
+        B2 -->|"5. LLM Request"| B3
+        B3 -->|"6. Ambil API Key"| H1
+        B3 -->|"7a. API Call"| G[Groq Cloud]
+        G -->|"7b. LLM Response"| B3
+        B3 -->|"Proses Response"| B1
+        B1 -->|"Data Terproses"| F3
+        B4 -->|"State Management"| F3
+        B5 -->|Cache Request| B3
+        B6 -->|Handle Errors| ALL[" "]
     end
 
-    style HuggingFaceSpace fill:#f4d442,stroke:#333,stroke-width:2px
-    style External fill:#e0e0e0,stroke:#666
+    subgraph External["🔴 External Services"]
+        G
+        CDN["🌍 Hugging Face CDN"]
+    end
+
+    W -->|HTTPS| CDN
+    CDN -->|Reverse Proxy| HuggingFaceSpace
+    HuggingFaceSpace -->|Rate Limiting| CDN
+
+    style HuggingFaceSpace fill:#f0f9ff,stroke:#2563eb,stroke-width:2px
+    style UserLayer fill:#e6f7ff,stroke:#1e88e5
+    style External fill:#fee,stroke:#dc2626
+    style HFInfra fill:#f5f5f5,stroke:#666
+
+    classDef important fill:#ffd700,stroke:#000,stroke-width:2px
+    class B3,H1 important
 ```
 
 ### **2.2 Data Flow**  

@@ -63,22 +63,32 @@ fuzzywuzzy==0.18.0      # (For column name matching - if used)
 ### **2.1 Component Diagram**  
 ```mermaid
 flowchart TB
-    subgraph Frontend
-        A[Streamlit UI] --> B[File Uploader]
-        A --> C[Code Editor]
-        A --> D[Output Display]
-    end
+    subgraph HuggingFaceSpace["Hugging Face Space (Deployment)"]
+        subgraph Frontend
+            A[Streamlit UI] --> B[File Uploader]
+            A --> C[Code Editor]
+            A --> D[Output Display]
+        end
 
-    subgraph Backend
-        B --> E[Data Processor]
-        C --> F[Code Executor]
-        C --> G[Groq LLM API]
-        F --> H[Session State]
+        subgraph Backend
+            B --> E[Data Processor]
+            C --> F[Code Executor]
+            C --> G[Groq LLM API Client]
+            F --> H[Session State]
+            G -->|Internal Calls| E
+            E -->|Processed Data| D
+        end
     end
 
     subgraph External
-        G -->|API Calls| I[Groq Cloud]
+        I[Groq Cloud] -->|API Responses| G
+        G -->|API Requests| I
+        J[Internet] -->|HTTPS Traffic| HuggingFaceSpace
+        HuggingFaceSpace -->|HTTPS Traffic| J
     end
+
+    style HuggingFaceSpace fill:#f4d442,stroke:#333,stroke-width:2px
+    style External fill:#e0e0e0,stroke:#666
 ```
 
 ### **2.2 Data Flow**  

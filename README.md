@@ -5,7 +5,7 @@
 
 ## **1. Introduction**  
 **DataCoder AI** is a web-based interactive data analysis tool that combines:  
-- **Jupyter-like Python execution**  
+- **Data Analysis Python Coder**  
 - **AI-powered code generation** (via Groq API)  
 - **Data visualization**  
 - **Chat-based coding assistance**  

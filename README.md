@@ -56,8 +56,6 @@ fuzzywuzzy==0.18.0      # (For column name matching - if used)
      ```text
      waitress==2.1.2
      ```
-
-Let me know if you need version adjustments or encounter dependency conflicts!
 ---
 
 ## **2. System Architecture**  

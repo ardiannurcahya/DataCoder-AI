@@ -73,13 +73,15 @@ flowchart TB
         B --> E[Data Processor]
         C --> F[Code Executor]
         F --> H[Session State]
-        F --> G1[Groq LLM API]
-        F --> G2[Hugging Face LLM API]
+        F --> G[Groq LLM API Client]
+    end
+
+    subgraph Deployment
+        Backend --> J[Hugging Face Spaces]
     end
 
     subgraph External
-        G1 -->|API Call| I[Groq Cloud]
-        G2 -->|API Call| J[Hugging Face Inference Endpoint]
+        G -->|API Call| I[Groq Cloud LLM]
     end
 ```
 

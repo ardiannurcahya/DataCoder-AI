@@ -186,13 +186,13 @@ with col1a:
                             st.markdown(clean_response)
                         st.session_state.chatbot['chat_history'].append({"role": "assistant", "content": clean_response})
                     except AttributeError as e:
-                        st.error(f"Please confirm data before before starting the chat: {e}")
+                        st.error(f"Please confirm dataset before starting the chat: {e}")
                 else:
                     st.write('You need to upload the data first')
 
 with col2a:  # Sidebar for chatbot
     with st.container(height=570):
-        st.header("📊 Chatbot Data Analysis Coder")
+        st.header("📊 DataCoder-AI")
         st.markdown("Analyze your CSV data with LLM Models")
 
         def reset_data_state():

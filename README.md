@@ -217,7 +217,7 @@ plt.show()
 |--------------------------------|----------------------------------------|
 | Groq API errors                | Check quota/network connection        |
 | CSV parsing fails              | Verify delimiter (use `delimiter=';'`)|
-| Plot not showing               | Ensure `plt.show()` is called         |
+| Plot not showing               | Ensure `plt.show()` not called         |
 
 ---
 

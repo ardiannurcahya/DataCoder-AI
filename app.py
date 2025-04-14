@@ -173,13 +173,20 @@ with col1a:
             
             with st.spinner("Thinking..."):
                 if "df" in st.session_state:
-                    response = text_llm(prompt_chatbot(user_query,st.session_state.df.columns, st.session_state.df.shape, st.session_state.df.dtypes))
-                    clean_response = re.sub(r'<\s*think\s*>.*?<\s*/\s*think\s*>', '', response, flags=re.DOTALL | re.IGNORECASE)
-                    
-                    # show and save chatbot response
-                    with st.chat_message("assistant"):
-                        st.markdown(clean_response)
-                    st.session_state.chatbot['chat_history'].append({"role": "assistant", "content": clean_response})
+                    try:
+                        df = st.session_state.df
+                        columns = df.columns
+                        shape = df.shape
+                        dtypes = df.dtypes
+                        response = text_llm(prompt_chatbot(user_query,st.session_state.df.columns, st.session_state.df.shape, st.session_state.df.dtypes))
+                        clean_response = re.sub(r'<\s*think\s*>.*?<\s*/\s*think\s*>', '', response, flags=re.DOTALL | re.IGNORECASE)
+                        
+                        # show and save chatbot response
+                        with st.chat_message("assistant"):
+                            st.markdown(clean_response)
+                        st.session_state.chatbot['chat_history'].append({"role": "assistant", "content": clean_response})
+                    except AttributeError as e:
+                        st.error(f"Please confirm data before before starting the chat: {e}")
                 else:
                     st.write('You need to upload the data first')
 

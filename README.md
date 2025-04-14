@@ -18,14 +18,17 @@ Here are the **required libraries** for your DataCoder AI application, extracted
 ### **Core Dependencies**  
 **Install via `pip install -r requirements.txt`:**
 ```text
-streamlit==1.32.0        # Web UI framework
-pandas==2.0.0           # Data manipulation
-matplotlib==3.7.0       # Basic visualization
-seaborn==0.12.2         # Advanced plots
-plotly==5.18.0          # Interactive charts
-requests==2.31.0        # API calls (Groq)
-langchain==0.1.0        # LLM interface (if used)
-python-dotenv==1.0.0    # Environment variables
+streamlit==1.32.2
+plotly==5.21.0
+pandas==2.2.3
+matplotlib==3.10.1
+seaborn==0.13.2
+requests==2.32.3
+langchain==0.3.23
+python-dotenv==1.1.0
+scikit-learn==1.6.1
+fuzzywuzzy==0.18.0
+pyarrow==19.0.1
 ```
 
 ### **Optional/Implicit Dependencies**  

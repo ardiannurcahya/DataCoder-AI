@@ -1,22 +1,17 @@
 import io
-import contextlib
 import streamlit as st
 import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
-import requests
-from datetime import datetime
-from langchain.llms.base import LLM
 import csv
 import re
-import pandas as pd
-from io import StringIO
-from typing import Optional, List
 import plotly.express as px
-import re
+from scipy.stats import skew
+from prompt_models import *
+from execution_programs import *
+from llm_models import text_llm, code_llm
 
 st.set_page_config(layout="wide")
-# Custom CSS for Jupyter-like appearance
+    
+# Custom style CSS
 st.markdown("""
 <style>
     .block-container {
@@ -56,21 +51,18 @@ st.markdown("""
         margin-bottom: 1rem;
     }
     .stButton > button {
-        background-color: #111016; /* Warna background */
-        color: white; /* Warna teks */
-        border: 1.5px solid #ffffff; /* Border dengan warna yang sama seperti background */
-        padding: 0.1rem 0.5rem; /* Padding untuk tombol */
-        border-radius: 5px; /* Membuat border bulat (round) */
-        font-size: 16px; /* Ukuran font */
-        font-weight: bold; /* Membuat teks menjadi tebal */
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); /* Tambahkan shadow agar tombol terlihat lebih modern */
-        transition: all 0.3s ease; /* Transisi halus saat hover */
+        padding: 0rem 0.5rem; 
+        border-radius: 5px; 
+        font-size: 16px; 
+        font-weight: bold; 
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); 
+        transition: all 0.3s ease; 
     }
 
     .stButton > button:hover {
-        background-color: #357ae8; /* Ganti background saat hover */
-        border-color: #357ae8; /* Ganti warna border saat hover */
-        box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15); /* Tambahkan efek bayangan saat hover */
+        background-color: #357ae8; 
+        border-color: #357ae8; 
+        box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15); 
     }
     .history-item {
         margin-bottom: 2rem;
@@ -84,20 +76,20 @@ st.markdown("""
     }
     .chat-message.user {
         background-color: #262626;
-        align-self: flex-start;  /* Pesan pengguna berada di sebelah kiri */
+        align-self: flex-start;  
     }
     .chat-message.assistant {
         background-color: #262626;
-        align-self: flex-end;  /* Pesan asisten berada di sebelah kanan */
+        align-self: flex-end; 
     }
     .chat-message {
-            font-size: 14px;  /* Ukuran huruf standar */
+            font-size: 14px; 
     }
     .chat-message.user {
-            font-size: 16px;  /* Ukuran huruf untuk pesan pengguna */
+            font-size: 16px;  
     }
     .chat-message.assistant {
-            font-size: 14px;  /* Ukuran huruf untuk pesan asisten */
+            font-size: 14px; 
     }
     .sidebar {
         width: 300px;
@@ -123,358 +115,23 @@ if 'execution_history' not in st.session_state:
 if 'df' not in st.session_state:
     st.session_state.df = None
 
-# =======================
-# Custom LLMs
-# =======================
-class GroqLLM(LLM):
-    model: str = "qwen-2.5-coder-32b"
-    temperature: float = 0.3
-    api_key: str = "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"
 
-    @property
-    def _llm_type(self) -> str:
-        return "groq-llm"
-
-    def _call(self, prompt: str, stop: Optional[List[str]] = None) -> str:
-        headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json",
-        }
-
-        payload = {
-            "messages": [{"role": "user", "content": prompt}],
-            "model": self.model,
-            "temperature": self.temperature,
-        }
-
-        try:
-            response = requests.post(
-                "https://api.groq.com/openai/v1/chat/completions",
-                headers=headers,
-                json=payload
-            )
-            response.raise_for_status()
-            return response.json()["choices"][0]["message"]["content"]
-        except Exception as e:
-            st.error(f"Error calling Groq API: {str(e)}")
-            return "Sorry, there was an error processing your request."
-
-class GroqTextLLM(LLM):
-    model: str = "deepseek-r1-distill-llama-70b"
-    temperature: float = 0.7
-    api_key: str = "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"
-
-    @property
-    def _llm_type(self) -> str:
-        return "groq-text-llm"
-
-    def _call(self, prompt: str, stop: Optional[List[str]] = None) -> str:
-        headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json",
-        }
-
-        payload = {
-            "messages": [{"role": "user", "content": prompt}],
-            "model": self.model,
-            "temperature": self.temperature,
-        }
-
-        try:
-            response = requests.post(
-                "https://api.groq.com/openai/v1/chat/completions",
-                headers=headers,
-                json=payload
-            )
-            response.raise_for_status()
-            return response.json()["choices"][0]["message"]["content"]
-        except Exception as e:
-            st.error(f"Error calling Groq API: {str(e)}")
-            return "Sorry, there was an error processing your request."
-
-# Initialize LLMs
-code_llm = GroqLLM()
-text_llm = GroqTextLLM()
-
-
-def analyze_code_execution(code: str, execution_result: dict, df: pd.DataFrame) -> str:
-    """
-    Analyze only the execution results (output and variables) to provide focused insights.
-    
-    Args:
-        code: The Python code that was executed
-        execution_result: The dictionary containing execution results
-        df: The DataFrame being analyzed (for context only)
-        
-    Returns:
-        str: Natural language analysis focused on the execution results
-    """
-    # Extract relevant information from execution_result
-    output = execution_result.get('stdout', 'Tidak ada output teks')
-    variables = execution_result.get('variables', {})
-    error = execution_result.get('error', None)
-    
-    # Prepare variable summaries
-    var_summaries = []
-    for var_name, var_value in variables.items():
-        if isinstance(var_value, (pd.DataFrame, pd.Series)):
-            var_summaries.append(f"- {var_name}: {type(var_value).__name__} dengan bentuk {var_value.shape}")
-        elif isinstance(var_value, (plt.Figure, sns.axisgrid.Grid)):
-            var_summaries.append(f"- {var_name}: Visualisasi plot")
-        else:
-            var_summaries.append(f"- {var_name}: {type(var_value).__name__}")
-
-    # Prepare the prompt for the text model
-    prompt = f"""
-    Kamu adalah analis data yang menjelaskan hasil eksekusi kode Python kepada pemangku kepentingan non-teknis.
-
-    Hasil eksekusi yang perlu dianalisis:
-    1. Output teks:
-    {output}
-    
-    2. Variabel yang dihasilkan:
-    {chr(10).join(var_summaries) if var_summaries else 'Tidak ada variabel baru dibuat'}
-    
-    3. Error (jika ada):
-    {error if error else 'Tidak ada error'}
-
-    analisis juga data berikut:
-    - Success: {execution_result['success']}
-    - Output: {execution_result.get('stdout', 'No output')}
-    - Figure: {execution_result.get('figure', 'None')}
-    - Error: {execution_result.get('error', 'None')}
-    - Variables created: {list(execution_result.get('variables', {}).keys())}
-    - {code}
-    
-    Dataframe shape: {df.shape}
-    
-    Berikan insight lebih lanjut berdasarkan seluruh kolom data yang ada pada DataFrame. Fokus pada:
-    - Fokuslah untuk membahas hasil eksekusi
-    - Jangan menganalisis dari data yg tidak ada
-    - Temuan atau pola menarik yang muncul dari data
-    - Hubungan atau korelasi antara kolom-kolom dalam data
-    - Faktor yang dapat mempengaruhi hasil analisis lebih lanjut
-    - Saran untuk pengolahan atau analisis lebih lanjut yang dapat dilakukan pada data ini
-    - Jangan membahas kode Python-nya
-    - Berikan insight secara singkat dan padat algoritma yang perlu digunakan seperti pada data science dan AI beserta kegunaannya terhadap analisis
-    - Gunakan bahasa Indonesia yang mudah dipahami
-    - Hanya gunakan kata ganti orang ketiga
-    """
-    
-    # Get analysis from the text model
-    llm = GroqTextLLM()
-    response = llm(prompt)
-
-    # Bersihkan output untuk menghilangkan bagian yang tidak diinginkan
-    clean_response = re.sub(r'<\s*think\s*>.*?<\s*/\s*think\s*>', '', response, flags=re.DOTALL | re.IGNORECASE)
-    
-    return clean_response
-
-
-
-# =======================
-# Code Execution Functions
-# =======================
-
-# =======================
-def execute_code(code: str, df: pd.DataFrame):
-    """Execute Python code safely and return outputs"""
-    # Extract Python code from markdown blocks
-    if "```python" in code:
-        clean_code = code.split("```python")[1].split("```")[0].strip()
-    else:
-        clean_code = code.strip()
-    
-    # Add required imports if missing
-    required_imports = [
-        "import pandas as pd",
-        "import matplotlib.pyplot as plt",
-        "import seaborn as sns"
-    ]
-    
-    for imp in required_imports:
-        if imp not in clean_code:
-            clean_code = imp + "\n" + clean_code
-    
-    # Prepare execution environment
-    local_vars = {
-        'df': df,
-        'plt': plt,
-        'sns': sns,
-        'pd': pd
-    }
-    
-    # Capture outputs
-    stdout = io.StringIO()
-    stderr = io.StringIO()
-    fig = None
-    
-    try:
-        with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
-            exec(clean_code, local_vars)
-            
-            # Check for plots
-            if plt.gcf().get_axes():
-                fig = plt.gcf()
-            
-            return {
-                'code': clean_code,
-                'stdout': stdout.getvalue(),
-                'stderr': stderr.getvalue(),
-                'figure': fig,
-                'success': True,
-                'variables': {k: v for k, v in local_vars.items() 
-                              if not k.startswith('_') and k not in ['df', 'plt', 'sns', 'pd']}
-            }
-
-    except Exception as e:
-        return {
-            'code': clean_code,
-            'error': str(e),
-            'stderr': stderr.getvalue(),
-            'success': False
-        }
-
-def add_to_history(execution_result):
-    """Add execution result to history with timestamp"""
-    history_item = {
-        **execution_result,
-        'timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    }
-    st.session_state.execution_history.append(history_item)
-
-    # Generate explanation for successful executions
-    if execution_result['success']:
-        with st.spinner("Menganalisis hasil..."):
-            df_to_analyze = st.session_state.df_cleaned if 'df_cleaned' in st.session_state else st.session_state.df
-            
-            analysis = analyze_code_execution(
-                code=execution_result['code'],
-                execution_result=execution_result,
-                df=df_to_analyze  # Only used for context, not analyzed
-            )
-            
-            history_item['explanation'] = f"""
-            **Analisis Hasil Eksekusi:**
-            {analysis}
-            """
-            
-
-
-# =======================
-# Display Functions
-# =======================
-
-def display_code_with_highlight(code: str):
-    """Display formatted Python code using Streamlit's built-in code block"""
-    st.code(code, language='python')
-
-
-
-def display_history():
-    """Display all execution history items"""
-    st.markdown("## Execution History")
-    
-    if not st.session_state.execution_history:
-        st.info("No executions yet. Run some code to see results here.")
-        return
-    
-    for i, item in enumerate(reversed(st.session_state.execution_history)):
-        with st.container():
-            st.markdown(f"### Execution #{len(st.session_state.execution_history)-i}")
-            st.caption(f"Executed at {item['timestamp']}")
-            
-            # Display code
-            with st.expander("View Code", expanded=False):
-                display_code_with_highlight(item['code'])
-            
-            # Display outputs
-            if item['success']:
-                if 'explanation' in item:
-                    with st.expander("See Explanation"):
-                        st.markdown("**Explanation:**")
-                        st.info(item['explanation'])
-
-                if item['stdout']:
-                    with st.expander("View Output", expanded=False):
-                        st.markdown("**Output:**")
-                        lines = item['stdout'].split('\n')
-                        text_content = []
-                        table_data = []
-                        header_detected = False
-
-                        # Iterasi melalui setiap baris untuk memisahkan teks dan tabel
-                        for idx, line in enumerate(lines):
-                            cleaned_line = line.strip()
-                            if not cleaned_line:
-                                continue
-                            
-                            # Deteksi header tabel
-                            if not header_detected:
-                                if re.match(r"^[\w\s_]+$", cleaned_line) and len(cleaned_line.split()) > 1:
-                                    # Periksa baris berikutnya untuk memastikan ini adalah tabel
-                                    if (idx + 1 < len(lines)) and re.match(r"^\d+\s+[\d\.e+-]+", lines[idx+1].strip()):
-                                        header_detected = True
-                                        table_data = lines[idx:]
-                                        break
-                                    else:
-                                        text_content.append(cleaned_line)
-                                else:
-                                    text_content.append(cleaned_line)
-                        
-                        # Tampilkan konten teks
-                        if text_content:
-                            st.write("\n".join(text_content))
-                            
-                        # Coba parsing dan tampilkan tabel jika ada
-                        if table_data:
-                            try:
-                                # Bersihkan data untuk DataFrame
-                                clean_table = [line.strip() for line in table_data if line.strip()]
-                                df = pd.read_csv(StringIO("\n".join(clean_table)), sep=r"\s+", engine="python")
-                                st.dataframe(df)
-                            except Exception as e:
-                                st.write("\n".join(table_data))
-
-                
-                if item['figure']:
-                    st.markdown("**Visualization:**")
-                    fig = item['figure']
-                    st.pyplot(fig)
-                    plt.close()
-
-                        
-                if item['variables']:
-                    with st.expander("Created Variables"):
-                        st.json({k: str(type(v)) for k, v in item['variables'].items()})
-            else:
-                st.error("Execution failed")
-                st.error(item['error'])
-                if item['stderr']:
-                    st.text("Error details:")
-                    st.text(item['stderr'])
-            
-            st.markdown("---")
-
-# =======================
-# Main App
-# =======================
 # Main app layout
 col1a, col2a = st.columns([4, 7], gap="small")
 st.markdown("<div style='margin-top: 5px'></div>", unsafe_allow_html=True)
 show_col1 = st.toggle("Ask chat bot", value=True)
-# Atur rasio kolom berdasarkan kondisi
+
 if show_col1:
-    col1a, col2a = st.columns([4,7])  # Keduanya muncul
+    col1a, col2a = st.columns([4,7]) 
 else:
-    col2a, _ = st.columns([1,0.0001,])  # Kolom 2 disembunyikan, col1 melebar penuh
+    _ , col2a = st.columns([0.0001, 2]) 
     
 with col1a:
   if show_col1:
     with st.container(height=570):
-        st.header("💬 Coding Assistant")
+        st.header("💬 Chatbot Assistant")
         
-        # Inisialisasi state khusus untuk chatbot jika belum ada
+        # Initial state
         if 'chatbot' not in st.session_state:
             st.session_state.chatbot = {
                 'chat_history': [],
@@ -482,12 +139,11 @@ with col1a:
                 'prev_raw_dataframes': None
             }
         
-        # Tombol hapus semua chat
-        if st.button("🗑️ Hapus Semua Chat", key="clear_all_chat"):
+        # button clear all chat
+        if st.button("🗑️ Clear all chat", key="clear_all_chat"):
             st.session_state.chatbot['chat_history'] = []
         
-        # Tampilkan chat history
-        # Tampilkan chat history per pasangan user-assistant
+        # show history chatbot
         for i in range(0, len(st.session_state.chatbot['chat_history']), 2):
             user_msg = st.session_state.chatbot['chat_history'][i]
             assistant_msg = st.session_state.chatbot['chat_history'][i+1] if i+1 < len(st.session_state.chatbot['chat_history']) else None
@@ -504,45 +160,32 @@ with col1a:
         user_query = st.chat_input("Ask coding questions...", key="chatbot_input")
 
         if user_query:
-            # Simpan state sebelumnya khusus untuk chatbot
+            # save previous state
             st.session_state.chatbot['prev_df'] = st.session_state.get('df')
             st.session_state.chatbot['prev_raw_dataframes'] = st.session_state.get('raw_dataframes')
             
-            # Tampilkan pesan user langsung
+            # show chat user
             with st.chat_message("user"):
                 st.markdown(user_query)
             
-            # Tambahkan ke history
+            # add to history chat
             st.session_state.chatbot['chat_history'].append({"role": "user", "content": user_query})
             
             with st.spinner("Thinking..."):
-                prompt = f"""
-                Anda adalah seorang analyst. Jawab pertanyaan berikut dengan jelas 
+                if "df" in st.session_state:
+                    response = text_llm(prompt_chatbot(user_query,st.session_state.df.columns, st.session_state.df.shape, st.session_state.df.dtypes))
+                    clean_response = re.sub(r'<\s*think\s*>.*?<\s*/\s*think\s*>', '', response, flags=re.DOTALL | re.IGNORECASE)
+                    
+                    # show and save chatbot response
+                    with st.chat_message("assistant"):
+                        st.markdown(clean_response)
+                    st.session_state.chatbot['chat_history'].append({"role": "assistant", "content": clean_response})
+                else:
+                    st.write('You need to upload the data first')
 
-                Pertanyaan: {user_query}
-
-                Ketentuan jawaban:
-                
-                1. Gunakan bahasa Indonesia yang formal
-                2. Jangan sertakan contoh kode
-                3. Format kode dalam blok code
-                4. Jelaskan istilah teknis dengan analogi sederhana
-                5. Selalu berikan tag untuk proses berpikir anda
-                6. Langsung jawab pada intinya
-                7. Hanya tuliskan poin-poinnya saja
-                8 Jawablah sesingkat mungkin
-                """
-                response = text_llm(prompt)
-                clean_response = re.sub(r'<\s*think\s*>.*?<\s*/\s*think\s*>', '', response, flags=re.DOTALL | re.IGNORECASE)
-                
-                # Tampilkan dan simpan respon
-                with st.chat_message("assistant"):
-                    st.markdown(clean_response)
-                st.session_state.chatbot['chat_history'].append({"role": "assistant", "content": clean_response})
-
-with col2a:  # Sidebar untuk chatbot
+with col2a:  # Sidebar for chatbot
     with st.container(height=570):
-        st.title("📊 Data Analysis Powered by AI Assistance")
+        st.header("📊 Chatbot Data Analysis Coder")
         st.markdown("Analyze your CSV data with LLM Models")
 
         def reset_data_state():
@@ -554,8 +197,6 @@ with col2a:  # Sidebar untuk chatbot
         # Initialize session state if not already present
         if 'df' not in st.session_state:
             st.session_state.df = None
-
-        st.header("CSV File Uploader")
 
         uploaded_files = st.file_uploader(
             "Upload CSV file(s)", 
@@ -628,7 +269,6 @@ with col2a:  # Sidebar untuk chatbot
             if st.session_state.raw_dataframes:
                 dataframes = st.session_state.raw_dataframes
                 
-                st.subheader("Merge Configuration")
                 col1, col2 = st.columns([3, 1])
                 
                 with col1:
@@ -664,10 +304,8 @@ with col2a:  # Sidebar untuk chatbot
                                 None
                 
                 with col2:
-                    st.write("")  # Spacer
-                    st.write("")  # Spacer
-                    preview_merge = st.button("🔄 Preview")
-                    confirm_merge = st.button("✅ Confirm")
+                    preview_button = st.button("🔄 Preview")
+                    confirm_button = st.button("✅ Confirm")
                     reset_btn = st.button("🔄 Reset")
                 
                 # Reset logic
@@ -676,11 +314,11 @@ with col2a:  # Sidebar untuk chatbot
                     st.rerun()
                 
                 # Preview logic
-                if preview_merge:
-                    with st.spinner("Generating merge preview..."):
+                if preview_button:
+                    with st.spinner("Generating preview..."):
                         try:
                             if merge_option == "single data":
-                                preview_df = dataframes
+                                preview_df = dataframes[0]
                             elif merge_option == "Horizontal (concat columns)":
                                 # Find common indices across ALL dataframes
                                 common_indices = dataframes[0].index
@@ -730,14 +368,14 @@ with col2a:  # Sidebar untuk chatbot
                                         if common_keys:
                                             merged_df = pd.merge(merged_df, next_df, on=common_keys)
                                         else:
-                                            print(f"[WARNING] Tidak ada key yang cocok antara:\n{merged_df.columns}\n&\n{next_df.columns}")
+                                            print(f"[WARNING] There is no matching key between:\n{merged_df.columns}\n&\n{next_df.columns}")
                                     
                                     return merged_df
                                 
                                 preview_df = auto_merge_many(dataframes)
                             
                             st.session_state.preview_df = preview_df
-                            st.success("Merge preview generated!")
+                            st.success("Preview generated!")
                             
                             # Show preview stats
                             st.subheader("Preview Results")
@@ -768,14 +406,14 @@ with col2a:  # Sidebar untuk chatbot
                                     st.success("No missing values found!")
                         
                         except Exception as e:
-                            st.error(f"Merge preview failed: {str(e)}")
+                            st.error(f"Preview failed: {str(e)}")
                             st.stop()
                 
                 # Confirm merge logic
-                if confirm_merge and st.session_state.preview_df is not None:
+                if confirm_button and st.session_state.preview_df is not None:
                     st.session_state.df = st.session_state.preview_df
                     st.session_state.preview_df = None  # Clear preview after confirmation
-                    st.success("Merge confirmed! Data is now available for analysis.")
+                    st.success("Data is now available for analysis.")
                     st.balloons()
                     st.rerun()
                 
@@ -797,10 +435,9 @@ with col2a:  # Sidebar untuk chatbot
             
             # If merge is already confirmed, show the final data
             if st.session_state.df is not None:
-                st.subheader("🔍 Merged Data Analysis")
                 
                 # Data cleaning options (only after merge is confirmed)
-                with st.expander("🧹 Data Cleaning", expanded=True):
+                with st.expander("**🧹 Data Cleaning**", expanded=True):
                     # Inisialisasi df_cleaned di session state jika belum ada
 
                     st.session_state.df_cleaned = st.session_state.df.copy()
@@ -850,7 +487,7 @@ with col2a:  # Sidebar untuk chatbot
                                 st.success(f"Removed {removed_dups} duplicate rows!")
                     
                     with clean_options[2]:
-                        col_rename = st.text_input("Rename (e.g., 'old:new')")
+                        col_rename = st.text_input("Rename ('old:new')")
                         if st.button("Rename Column") and col_rename and ":" in col_rename:
                             old, new = col_rename.split(":", 1)
                             if old in st.session_state.df_cleaned.columns:
@@ -910,15 +547,11 @@ with col2a:  # Sidebar untuk chatbot
 
                     # Tampilkan info missing values setelah cleaning
                     missing_values = st.session_state.df_cleaned.isnull().sum().sum()
-                    if missing_values > 0:
-                        st.warning(f"⚠️ Warning: There are still {missing_values} missing values in the data")
-                        if st.button("Show Missing Values Details"):
-                            missing_df = st.session_state.df_cleaned.isnull().sum()
-                            missing_df = missing_df[missing_df > 0].reset_index()
-                            missing_df.columns = ['Column', 'Missing Count']
-                            st.dataframe(missing_df)
+                    duplicate_values = st.session_state.df_cleaned.duplicated().sum().sum()
+                    if missing_values > 0 or duplicate_values > 0:
+                        st.warning(f"⚠️ Warning: There are still {missing_values} missing values and {duplicate_values} ducplicate rows in the data")
                     else:
-                        st.success("✅ No missing values remaining!")
+                        st.success("✅ No missing values and duplicate rows remaining!")
                 
                 # Final data display
                 st.session_state.df = st.session_state.df_cleaned
@@ -933,7 +566,7 @@ with col2a:  # Sidebar untuk chatbot
                         "Number of rows to display:",
                         min_value=5,
                         max_value=100,
-                        value=20,
+                        value=5,
                         key="num_rows_view"
                     )
                     st.dataframe(st.session_state.df.head(num_rows), use_container_width=True)
@@ -955,29 +588,81 @@ with col2a:  # Sidebar untuk chatbot
                     st.write(f"**Unique values:** {len(col_data.unique())}")
                     st.write(f"**Missing values:** {col_data.isnull().sum()} ({col_data.isnull().mean()*100:.2f}%)")
                     
-                    if col_data.nunique() < 10:
+
+                    if col_data.nunique() < 20 and not pd.api.types.is_numeric_dtype(col_data):
+                        ascending = st.checkbox("Ascending", value=False)
                         st.write("**Distribution**")
-                        column_name = col_data.name  # Nama kolom
+                        column_name = col_data.name
 
-                        # Masukkan col_data ke DataFrame agar px.histogram bisa membaca kolomnya
+                        # sum and sort data
+                        counts = col_data.value_counts(ascending=ascending)
+                        ordered_categories = counts.index.tolist()
+
+                        # create dataframe and category for data
                         df_temp = pd.DataFrame({column_name: col_data})
+                        df_temp[column_name] = pd.Categorical(df_temp[column_name], categories=ordered_categories, ordered=True)
 
+                        # create histogram
                         fig = px.histogram(
                             df_temp,
                             x=column_name,
                             opacity=0.7,
-                            color_discrete_sequence=["#636EFA"],  # Opsional: warna
+                            color_discrete_sequence=["#d06200"],
                         )
 
-                        fig.update_traces(marker_line_color='black', marker_line_width=1)
+                        fig.update_traces(marker_line_color='gray', marker_line_width=1)
+
+                        # Show x axis based on category sorting
+                        fig.update_layout(
+                            template='seaborn',
+                            title=f"Histogram of {column_name}",
+                            xaxis_title=column_name,
+                            yaxis_title="Count",
+                            bargap=0.1,
+                            font=dict(family="Verdana", size=13),
+                            xaxis=dict(
+                                categoryorder="array",
+                                categoryarray=ordered_categories,
+                            )
+                        )
+
+                        st.plotly_chart(fig, use_container_width=True)
+
+                    elif pd.api.types.is_numeric_dtype(col_data):
+                        st.write("**Distribution**")
+                        column_name = col_data.name
+
+                        df_temp = pd.DataFrame({column_name: col_data.dropna()})
+                        
+                        fig = px.histogram(
+                            df_temp,
+                            x=column_name,
+                            nbins=30,
+                            opacity=0.85,
+                            color_discrete_sequence=["#d06200"],
+                        )
+
+                        fig.update_traces(marker_line_color='gray', marker_line_width=0.9)
 
                         fig.update_layout(
                             template='seaborn',
                             title=f"Histogram of {column_name}",
                             xaxis_title=column_name,
-                            yaxis_title="Count",  # Ganti dari "Density"
+                            yaxis_title="Count",
                             bargap=0.1,
                             font=dict(family="Verdana", size=13),
+                        )
+                        fig.update_layout(
+                            annotations=[
+                                dict(
+                                    text=f"Skewness: {skew(col_data):.2f}",
+                                    showarrow=False,
+                                    xref="paper", yref="paper",
+                                    x=0.95, y=0.95,
+                                    bordercolor='black',
+                                    borderwidth=1
+                                )
+                            ]
                         )
 
                         st.plotly_chart(fig, use_container_width=True)
@@ -985,6 +670,7 @@ with col2a:  # Sidebar untuk chatbot
                     else:
                         st.write("**Value counts (top 20):**")
                         st.dataframe(col_data.value_counts().head(20))
+
 
                 with tab4:
                     buffer = io.StringIO()
@@ -999,7 +685,7 @@ with col2a:  # Sidebar untuk chatbot
 
                     st.markdown("**Duplicate:**")
                     duplicate_count = st.session_state.df.duplicated().sum()
-                    st.write(f"Jumlah duplikat: {duplicate_count}")
+                    st.write(f"Total duplicate row: {duplicate_count}")
 
                     # Menampilkan jumlah duplikat dalam format JSON yang benar
                     st.json({"duplicate_count": duplicate_count})
@@ -1045,88 +731,15 @@ with col2a:  # Sidebar untuk chatbot
                             st.success("Export ready!")
                         except Exception as e:
                             st.error(f"Export failed: {str(e)}")
-            
-            # Reset all button
-            if st.button("🔄 Reset All Data", type="secondary"):
-                st.session_state.df = None
-                st.session_state.df_cleaned = None
-                st.session_state.raw_dataframes = None
-                st.session_state.preview_df = None
-                st.rerun()
                 
         # Input area
-        st.subheader("Code Input")
         input_method = st.radio("Input method:", ["Auto run code","Manual run code"])
 
         user_input = st.text_area("Enter your Python code or question:", height=150,
                                 placeholder="Write code here or ask a question about your data...",
                                 key="user_input")
-
-        def generate_prompt(user_input, df_columns):
-            """Generate optimized prompt for code generation"""
-            return f"""
-            Generate Python code to analyze pandas DataFrame 'df' according to request:
-            {user_input}
-
-            STRICT RULES (NUMBERED PRIORITY):
-            1. CODE STRUCTURE:
-                - Return complete executable code in ```python block
-                - All new variables MUST be added as new columns to existing 'df' using df['new_column'] syntax
-                - Never add a new variable (such as a list, Series, or array) to df if its length is less than the number of rows in df.
-                - Never create new DataFrames or use merge/join operations
-                - Print calculation result (such as a list, Series, or array) in console
-                - Define all temporary variables explicitly
-
-            2. DATA HANDLING:
-                - Use only columns from: {list(df_columns)}
-                - For new data storage:
-                    if isinstance(result, (pd.Series, list, np.ndarray)):
-                        df[new_col_name] = result
-                    elif numerical/string value:
-                        df[new_col_name] = [value]*len(df)
-                - For column matching:
-                    from fuzzywuzzy import process
-                    def find_best_match(query, cols, threshold=70):
-                        # [existing fuzzy match implementation]
-                    
-            3. COLUMN CREATION RULES:
-                a. Untuk hasil operasi matematika:
-                    df['hasil_kalkulasi'] = df['col1'] + df['col2']
-                
-                b. Untuk transformasi data:
-                    df['kategori_baru'] = df['col_existing'].apply(lambda x: x*2)
-                
-                c. Untuk agregasi grup:
-                    df['rata_grup'] = df.groupby('kolom_grup')['target'].transform('mean')
-                
-                d. Untuk hasil statistik:
-                    df['zscore'] = (df['nilai'] - df['nilai'].mean())/df['nilai'].std()
-
-            4. VISUALIZATION:
-                - Visualisasi harus menggunakan kolom dari df yang telah dimodifikasi
-                - Contoh: plt.plot(df['kolom_baru'], df['kolom_lama'])
-
-            5. OUTPUT HANDLING:
-                - Untuk menampilkan kolom baru:
-                    print(f"Kolom baru yang dibuat:", list(df.columns[-N:]))  # N = jumlah kolom baru
-                    print(df[['kolom_baru_1', 'kolom_baru_2']].head())
-                
-            6. ERROR PREVENTION:
-                - Cek panjang data sebelum membuat kolom baru:
-                    if len(variable) != len(df):
-                        raise ValueError("Panjang variabel tidak sesuai dengan DataFrame")
-                - Gunakan nama kolom unik:
-                    if 'nama_kolom' in df.columns:
-                        df['nama_kolom_rev'] = ...  # tambahkan suffix jika sudah ada
-
-            FINAL CHECK:
-            1. Pastikan tidak ada operasi merge/join/concat
-            2. Verifikasi semua hasil kalkulasi ada di df sebagai kolom
-            3. Cek konsistensi indeks untuk kolom baru
-            4. Pastikan print terakhir menampilkan df dengan kolom baru
-            5. Jangan menampilkan penjelasan apapun dari kode
-            6. Jika user menyebut 'pivot' gunakan fungsi groupby
-            """
+        
+        
 
         # Mode handling
         if input_method == "Auto run code":
@@ -1142,7 +755,7 @@ with col2a:  # Sidebar untuk chatbot
                 latest_vars = st.session_state.execution_history[-1].get('variables', {})
                 st.json({k: str(type(v)) for k, v in latest_vars.items()})
             if execute_btn and user_input:
-                with st.spinner("Generating code with AI..."):
+                with st.spinner("Execute code..."):
                     generated_code = code_llm(generate_prompt(user_input, st.session_state.df.columns.tolist()))
                     st.markdown("**Generated Code:**")
                     st.code(generated_code, language='python')
@@ -1166,7 +779,7 @@ with col2a:  # Sidebar untuk chatbot
                 st.json({k: str(type(v)) for k, v in latest_vars.items()})
 
             if code_btn and user_input:
-                with st.spinner("Membuat kode dengan AI..."):
+                with st.spinner("Generate Code"):
                     generated_code = code_llm(generate_prompt(user_input, st.session_state.df.columns.tolist()))
                     st.session_state.generated_code = generated_code
                     st.markdown("**Generated Code:**")

@@ -230,4 +230,20 @@ plt.show()
 **Notes for Production**:  
 1. Replace hardcoded API keys with environment variables  
 2. Add user authentication for multi-user support  
-3. Implement rate limiting for Groq API calls  
+3. Implement rate limiting for Groq API calls
+
+## Third Party Libraries and Licenses
+
+This project uses the following third-party libraries, and their licenses are included in the `LICENSES.txt` file:
+
+- **Streamlit** (MIT License) - https://github.com/streamlit/streamlit
+- **Pandas** (BSD 3-Clause License) - https://github.com/pandas-dev/pandas
+- **Matplotlib** (BSD 3-Clause License) - https://github.com/matplotlib/matplotlib
+- **Seaborn** (MIT License) - https://github.com/mwaskom/seaborn
+- **Plotly** (MIT License) - https://github.com/plotly/plotly.py
+- **LangChain** (MIT License) - https://github.com/hwchase17/langchain
+- **Scipy** (BSD 3-Clause License) - https://github.com/scipy/scipy
+- **Requests** (Apache 2.0 License) - https://github.com/psf/requests
+
+See the [LICENSES.txt](./LICENSES.txt) file for more details.
+

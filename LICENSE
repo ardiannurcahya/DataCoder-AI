@@ -20,17 +20,45 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-## Third Party Libraries and Licenses
+# Third-party Libraries and their Licenses
 
-This project uses the following third-party libraries, and their licenses are included in the `LICENSES.txt` file:
+1. Streamlit
+   - License: MIT License
+   - Repository: https://github.com/streamlit/streamlit
+   - License Details: https://opensource.org/licenses/MIT
 
-- **Streamlit** (MIT License) - https://github.com/streamlit/streamlit
-- **Pandas** (BSD 3-Clause License) - https://github.com/pandas-dev/pandas
-- **Matplotlib** (BSD 3-Clause License) - https://github.com/matplotlib/matplotlib
-- **Seaborn** (MIT License) - https://github.com/mwaskom/seaborn
-- **Plotly** (MIT License) - https://github.com/plotly/plotly.py
-- **LangChain** (MIT License) - https://github.com/hwchase17/langchain
-- **Scipy** (BSD 3-Clause License) - https://github.com/scipy/scipy
-- **Requests** (Apache 2.0 License) - https://github.com/psf/requests
+2. Pandas
+   - License: BSD 3-Clause License
+   - Repository: https://github.com/pandas-dev/pandas
+   - License Details: https://opensource.org/licenses/BSD-3-Clause
 
-See the [LICENSES.txt](./LICENSES.txt) file for more details.
+3. Matplotlib
+   - License: Matplotlib License (BSD-style)
+   - Repository: https://github.com/matplotlib/matplotlib
+   - License Details: https://opensource.org/licenses/BSD-3-Clause
+
+4. Seaborn
+   - License: MIT License
+   - Repository: https://github.com/mwaskom/seaborn
+   - License Details: https://opensource.org/licenses/MIT
+
+5. Plotly
+   - License: MIT License
+   - Repository: https://github.com/plotly/plotly.py
+   - License Details: https://opensource.org/licenses/MIT
+
+6. LangChain
+   - License: MIT License
+   - Repository: https://github.com/hwchase17/langchain
+   - License Details: https://opensource.org/licenses/MIT
+
+7. Scipy
+   - License: BSD 3-Clause License
+   - Repository: https://github.com/scipy/scipy
+   - License Details: https://opensource.org/licenses/BSD-3-Clause
+
+8. Requests
+   - License: Apache 2.0 License
+   - Repository: https://github.com/psf/requests
+   - License Details: https://opensource.org/licenses/Apache-2.0
+

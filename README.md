@@ -1,5 +1,6 @@
 # **Documentation for DataCoder AI**  
 **Last Updated**: 2025-04-12  
+![Screenshot 2025-04-14 164438](https://github.com/user-attachments/assets/72e1afa1-b3ab-4744-98c9-afe528a12013)
 **Live Demo App**: https://huggingface.co/spaces/ncardian/DataCoder-AI
 
 ---

@@ -1,13 +1,13 @@
 import io
 import streamlit as st
 import pandas as pd
-import csv
-import re
 import plotly.express as px
 from scipy.stats import skew
-from prompt_models import *
-from execution_programs import *
-from llm_models import text_llm, code_llm
+from data_loader import load_files, merge_dataframes
+from chatbot import init_state, handle_user_query
+from prompt_models import generate_prompt
+from execution_programs import execute_code, add_to_history
+from llm_models import code_llm
 
 st.set_page_config(layout="wide")
     
@@ -122,326 +122,25 @@ st.markdown("<div style='margin-top: 5px'></div>", unsafe_allow_html=True)
 show_col1 = st.toggle("Ask chat bot", value=True)
 
 if show_col1:
-    col1a, col2a = st.columns([4,7]) 
+    col1a, col2a = st.columns([4, 7])
 else:
-    _ , col2a = st.columns([0.0001, 2]) 
-    
-with col1a:
-  if show_col1:
-    with st.container(height=570):
-        st.header("💬 Chatbot Assistant")
-        
-        # Initial state
-        if 'chatbot' not in st.session_state:
-            st.session_state.chatbot = {
-                'chat_history': [],
-                'prev_df': None,
-                'prev_raw_dataframes': None
-            }
-        
-        # button clear all chat
-        if st.button("🗑️ Clear all chat", key="clear_all_chat"):
-            st.session_state.chatbot['chat_history'] = []
-        
-        # show history chatbot
-        for i in range(0, len(st.session_state.chatbot['chat_history']), 2):
-            user_msg = st.session_state.chatbot['chat_history'][i]
-            assistant_msg = st.session_state.chatbot['chat_history'][i+1] if i+1 < len(st.session_state.chatbot['chat_history']) else None
+    _, col2a = st.columns([0.0001, 2])
 
-            with st.expander(f"Chat {i//2 + 1}", expanded=False):
-                with st.chat_message("user"):
-                    st.markdown(user_msg["content"])
-                if assistant_msg:
-                    with st.chat_message("assistant"):
-                        st.markdown(assistant_msg["content"])
+if show_col1:
+    with col1a:
+        with st.container(height=570):
+            init_state()
+            handle_user_query()
 
-        
-        # Input chat
-        user_query = st.chat_input("Ask coding questions...", key="chatbot_input")
-
-        if user_query:
-            # save previous state
-            st.session_state.chatbot['prev_df'] = st.session_state.get('df')
-            st.session_state.chatbot['prev_raw_dataframes'] = st.session_state.get('raw_dataframes')
-            
-            # show chat user
-            with st.chat_message("user"):
-                st.markdown(user_query)
-            
-            # add to history chat
-            st.session_state.chatbot['chat_history'].append({"role": "user", "content": user_query})
-            
-            with st.spinner("Thinking..."):
-                if "df" in st.session_state:
-                    try:
-                        df = st.session_state.df
-                        columns = df.columns
-                        shape = df.shape
-                        dtypes = df.dtypes
-                        response = text_llm(prompt_chatbot(user_query,st.session_state.df.columns, st.session_state.df.shape, st.session_state.df.dtypes))
-                        clean_response = re.sub(r'<\s*think\s*>.*?<\s*/\s*think\s*>', '', response, flags=re.DOTALL | re.IGNORECASE)
-                        
-                        # show and save chatbot response
-                        with st.chat_message("assistant"):
-                            st.markdown(clean_response)
-                        st.session_state.chatbot['chat_history'].append({"role": "assistant", "content": clean_response})
-                    except AttributeError as e:
-                        st.error(f"Please confirm dataset before starting the chat: {e}")
-                else:
-                    st.write('You need to upload the data first')
-
-with col2a:  # Sidebar for chatbot
+with col2a:
     with st.container(height=570):
         st.header("📊 DataCoder-AI")
         st.markdown("Analyze your CSV data with LLM Models")
+        dataframes = load_files()
+        if dataframes:
+            merge_dataframes(dataframes)
 
-        def reset_data_state():
-            st.session_state.df = None
-            st.session_state.raw_dataframes = None
-            st.session_state.preview_df = None
-            st.session_state.file_names = [f.name for f in uploaded_files] if uploaded_files else []
-
-        # Initialize session state if not already present
-        if 'df' not in st.session_state:
-            st.session_state.df = None
-
-        uploaded_files = st.file_uploader(
-            "Upload CSV file(s)", 
-            type=["csv"], 
-            accept_multiple_files=True,
-            help="Upload one or more CSV files to combine"
-        )
-
-        if uploaded_files:
-            # Reset processing if files change
-            if 'prev_uploaded_files' not in st.session_state or st.session_state.prev_uploaded_files != [f.name for f in uploaded_files]:
-                st.session_state.df = None
-                st.session_state.raw_dataframes = None
-                st.session_state.preview_df = None
-                st.session_state.prev_uploaded_files = [f.name for f in uploaded_files]
-            
-            # Process files but don't merge yet
-            if st.session_state.raw_dataframes is None:
-                dataframes = []
-                processed_files = 0
-                
-                for uploaded_file in uploaded_files:
-                    with st.expander(f"📄 File: {uploaded_file.name}", expanded=False):
-                        try:
-                            # Try to detect delimiter
-                            raw_data = uploaded_file.getvalue().decode("utf-8")
-                            sniffer = csv.Sniffer()
-                            
-                            try:
-                                dialect = sniffer.sniff(raw_data.splitlines()[0])
-                                delimiter = dialect.delimiter
-                            except (csv.Error, IndexError):
-                                # Try common delimiters if sniffing fails
-                                for test_delim in [',', ';', '\t', '|']:
-                                    if test_delim in raw_data:
-                                        delimiter = test_delim
-                                        break
-                                else:
-                                    delimiter = ','  # default
-                            
-                            uploaded_file.seek(0)  # Reset file pointer
-                            
-                            # Read CSV with error handling
-                            try:
-                                df = pd.read_csv(uploaded_file, delimiter=delimiter, on_bad_lines='warn')
-                            except Exception as e:
-                                st.warning(f"Using Python engine for {uploaded_file.name} due to parsing issues")
-                                df = pd.read_csv(uploaded_file, delimiter=delimiter, engine='python')
-                            
-                            # Display file info
-                            st.write(f"Shape: {df.shape}")
-                            st.write(f"Detected delimiter: '{delimiter}'")
-                            st.dataframe(df.head(5), use_container_width=True)
-                            
-                            dataframes.append(df)
-                            processed_files += 1
-                            
-                        except Exception as e:
-                            st.error(f"Error processing {uploaded_file.name}: {str(e)}")
-                            continue
-                
-                if processed_files == 0:
-                    st.error("No files were successfully processed")
-                    st.stop()
-                
-                # Store raw dataframes in session state
-                st.session_state.raw_dataframes = dataframes
-            
-            # Only proceed if we have raw dataframes
-            if st.session_state.raw_dataframes:
-                dataframes = st.session_state.raw_dataframes
-                
-                col1, col2 = st.columns([3, 1])
-                
-                with col1:
-                    merge_option = st.radio(
-                        "Merge method:",
-                        ("single data","Horizontal (concat columns)", "Vertical (concat rows)", "Horizontal (merge on common columns)"),
-                        index=0,
-                        horizontal=True,
-                        key="merge_option"
-                    )
-                    
-                    # Additional merge parameters
-                    if merge_option == "Horizontal (merge on common columns)":
-                        if len(dataframes) > 0:
-                            common_cols = set(dataframes[0].columns)
-                            for df in dataframes[1:]:
-                                common_cols.intersection_update(df.columns)
-                            
-                            if common_cols:
-                                selected_cols = st.multiselect(
-                                    "Select columns to merge on:",
-                                    options=list(common_cols),
-                                    default=list(common_cols),
-                                    key="merge_columns"
-                                )
-                                how_merge = st.selectbox(
-                                    "Merge type:",
-                                    ["inner", "outer", "left", "right"],
-                                    index=1,
-                                    key="how_merge"
-                                )
-                            else:
-                                None
-                
-                with col2:
-                    preview_button = st.button("🔄 Preview")
-                    confirm_button = st.button("✅ Confirm")
-                    reset_btn = st.button("🔄 Reset")
-                
-                # Reset logic
-                if reset_btn:
-                    reset_data_state()
-                    st.rerun()
-                
-                # Preview logic
-                if preview_button:
-                    with st.spinner("Generating preview..."):
-                        try:
-                            if merge_option == "single data":
-                                preview_df = dataframes[0]
-                            elif merge_option == "Horizontal (concat columns)":
-                                # Find common indices across ALL dataframes
-                                common_indices = dataframes[0].index
-                                for df in dataframes[1:]:
-                                    common_indices = common_indices.intersection(df.index)
-                                
-                                if len(common_indices) == 0:
-                                    st.error("No common indices found across all dataframes")
-                                    st.stop()
-                                
-                                # Filter all dataframes to only common indices
-                                filtered_dfs = [df.loc[common_indices] for df in dataframes]
-                                
-                                # Handle duplicate column names
-                                all_columns = []
-                                duplicate_counter = {}
-                                
-                                for i, df in enumerate(filtered_dfs):
-                                    new_columns = []
-                                    for col in df.columns:
-                                        if col in all_columns:
-                                            if col not in duplicate_counter:
-                                                duplicate_counter[col] = 1
-                                            duplicate_counter[col] += 1
-                                            new_col = f"{col}_df{duplicate_counter[col]}"
-                                            new_columns.append(new_col)
-                                        else:
-                                            new_columns.append(col)
-                                    all_columns.extend(new_columns)
-                                    filtered_dfs[i].columns = new_columns
-                                
-                                # Concatenate horizontally
-                                preview_df = pd.concat(filtered_dfs, axis=1)
-                                
-                            elif merge_option == "Vertical (concat rows)":
-                                preview_df = pd.concat(dataframes, axis=0, ignore_index=True)
-                                
-                            elif merge_option == "Horizontal (merge on common columns)":
-                                def auto_merge_many(dfs):
-                                    if not dfs:
-                                        return None
-                                    
-                                    merged_df = dfs[0]
-                                    
-                                    for next_df in dfs[1:]:
-                                        common_keys = list(set(merged_df.columns) & set(next_df.columns))
-                                        if common_keys:
-                                            merged_df = pd.merge(merged_df, next_df, on=common_keys)
-                                        else:
-                                            print(f"[WARNING] There is no matching key between:\n{merged_df.columns}\n&\n{next_df.columns}")
-                                    
-                                    return merged_df
-                                
-                                preview_df = auto_merge_many(dataframes)
-                            
-                            st.session_state.preview_df = preview_df
-                            st.success("Preview generated!")
-                            
-                            # Show preview stats
-                            st.subheader("Preview Results")
-                            st.write(f"Shape: {preview_df.shape}")
-                            
-                            # Show sample data with tabs
-                            tab1, tab2 = st.tabs(["First Rows", "Last Rows"])
-                            with tab1:
-                                st.dataframe(preview_df.head(20), use_container_width=True)
-                            with tab2:
-                                st.dataframe(preview_df.tail(20), use_container_width=True)
-                            
-                            # Show quick stats
-                            with st.expander("Preview Statistics"):
-                                st.write("Column types:")
-                                st.dataframe(preview_df.dtypes.astype(str).reset_index().rename(
-                                    columns={'index': 'Column', 0: 'DataType'}
-                                ))
-                                
-                                st.write("Missing values:")
-                                missing = preview_df.isnull().sum()
-                                missing = missing[missing > 0].reset_index().rename(
-                                    columns={'index': 'Column', 0: 'Missing Count'}
-                                )
-                                if len(missing) > 0:
-                                    st.dataframe(missing)
-                                else:
-                                    st.success("No missing values found!")
-                        
-                        except Exception as e:
-                            st.error(f"Preview failed: {str(e)}")
-                            st.stop()
-                
-                # Confirm merge logic
-                if confirm_button and st.session_state.preview_df is not None:
-                    st.session_state.df = st.session_state.preview_df
-                    st.session_state.preview_df = None  # Clear preview after confirmation
-                    st.success("Data is now available for analysis.")
-                    st.balloons()
-                    st.rerun()
-                
-                # Show raw data info
-                with st.expander("📦 Raw Data Summary", expanded=False):
-                    st.write(f"Total files loaded: {len(dataframes)}")
-                    for i, df in enumerate(dataframes, 1):
-                        st.write(f"### Dataframe {i}")
-                        st.write(f"- Shape: {df.shape}")
-                        st.write("- Columns:")
-                        st.dataframe(pd.DataFrame({
-                            'Column': df.columns,
-                            'Type': df.dtypes.values,
-                            'Missing %': (df.isnull().mean() * 100).round(2)
-                        }), hide_index=True)
-                        
-                        if st.checkbox(f"Show sample data for Dataframe {i}", key=f"show_raw_{i}"):
-                            st.dataframe(df.head(5), use_container_width=True)
-            
-            # If merge is already confirmed, show the final data
-            if st.session_state.df is not None:
+        if st.session_state.df is not None:
                 
                 # Data cleaning options (only after merge is confirmed)
                 with st.expander("**🧹 Data Cleaning**", expanded=True):
